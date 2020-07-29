@@ -123,9 +123,6 @@ public class main {
     }
 
     static String replaceVariables(String sentence) {
-//        sentence = sentence.replaceAll("\\(String\\)", "");
-//        sentence = sentence.replaceAll("\\(", "");
-//        sentence = sentence.replaceAll("\\)", "");
         Pattern p = Pattern.compile("v[\\d]+(_[\\d]+)");
         Matcher m = p.matcher(sentence);
         if (m.find()) {
@@ -136,7 +133,6 @@ public class main {
             sentence = sentence.replaceAll(m.group(), "");
         }
         return sentence;
-//        return "";
 //        return sentence.replaceAll("v[\\d]+(_[\\d]+)", "");
     }
 
