@@ -1,4 +1,4 @@
-import java.util.ArrayList;
+import java.util.*;
 
 /**
  * Created by HAPPY
@@ -6,6 +6,23 @@ import java.util.ArrayList;
 
 
 public class CodeParser {
+
+    private static String LEFT_BRACKET = "{";
+    private static String RIGHT_BRACKET = "}";
+    private static String[] trivialInstructions = {
+            "if(",
+            LEFT_BRACKET,
+            RIGHT_BRACKET,
+
+    };
+
+    static String stripVariable(String sentence) {
+        sentence = sentence.replaceAll("v[\\d]+(_[\\d]+)", "R");
+        sentence = sentence.replaceAll("v[\\d]+", "R");
+        sentence = sentence.replaceAll("arg[\\d]+", "R");
+        return sentence;
+    }
+
     static String getOuterBlock(String block) {
         int start = block.indexOf('{');
         int end = block.indexOf('}');
@@ -30,37 +47,49 @@ public class CodeParser {
         return result;
     }
 
-    /**
-     * @param source
-     * @param target
-     * @return similar score. From 0 to 100
-     */
-    static int valuateBlocks(String source, String target) {
-        ArrayList<String> sourceInstructions = getInstructions(source);
-        ArrayList<String> targetInstructions = getInstructions(target);
-
-        int MAXSCORE = sourceInstructions.size();
-        if(MAXSCORE==0){
-            return 0;
-        }
-        int score = 0;
-        for (String instruction : sourceInstructions) {
-            for (int i = 0; i < targetInstructions.size(); i++) {
-                String targetInstruction = targetInstructions.get(i);
-                if (targetInstruction.equals(instruction)) {
-                    ++score;
-                    targetInstructions.remove(i);
+    static ArrayList<String> stripTrivialInstructions(ArrayList<String> instructions) {
+        Iterator<String> instIterator = instructions.iterator();
+        while (instIterator.hasNext()) {
+            String inst = instIterator.next();
+            for (String trivial : trivialInstructions) {
+                if (inst.contains(trivial)) {
+                    instIterator.remove();
                     break;
                 }
             }
         }
-        System.out.println("score: " + score);
-        System.out.println("max score: " + MAXSCORE);
-        return score * 100 / MAXSCORE;
+        return instructions;
     }
+
+
+    static ArrayList<String> parseConditionToToken(String cond) {
+        ArrayList<String> condList = new ArrayList<>();
+        String[] tokens = cond.split("\\||&&");
+        for (String token : tokens) {
+            token = token.trim();
+            if (!token.equals("")) {
+                condList.add(token);
+            }
+        }
+        return condList;
+    }
+
+    static ArrayList<String> splitToken(String tokenString) {
+        ArrayList<String> condList = new ArrayList<>();
+        String[] tokens = tokenString.split("\\.");
+        for (String token : tokens) {
+            token = token.trim();
+            if (!token.equals("")) {
+                condList.add(token);
+            }
+        }
+        return condList;
+    }
+
 
     /**
      * Only for test
+     *
      * @param args
      */
     public static void main(String[] args) {
@@ -89,6 +118,11 @@ public class CodeParser {
                 "        }\n" +
                 "        else {";
 //        System.out.println(getOuterBlock(""));
-        System.out.println(valuateBlocks(source, target));
+//        System.out.println(valuateBlocks(source, target));
+
+        System.out.println(parseConditionToToken("happy&&sdfaff||454a &&acfa.as < iocs.pa || a.b.c"));
+        System.out.println(splitToken(" !happy.1.2.5"));
+
+
     }
 }

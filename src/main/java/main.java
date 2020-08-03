@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.lang.Math.max;
 import static java.lang.Math.min;
 
 /**
@@ -48,14 +49,7 @@ public class main {
     private static int dumpLineLower = -2;
     private static int dumpLineUpper = 6;
 
-    static String stripVariable(String sentence) {
-        sentence = sentence.replaceAll("v[\\d]+(_[\\d]+)", "");
-        sentence = sentence.replaceAll("v[\\d]+", "");
-        sentence = sentence.replaceAll("arg[\\d]+", "");
-        return sentence;
-    }
-
-    static int countChar(String sentence, String targetChar) {
+    private static int countChar(String sentence, String targetChar) {
         int cnt = 0;
         int index = -1;
         while ((index = sentence.indexOf(targetChar, index)) > -1) {
@@ -65,7 +59,7 @@ public class main {
         return cnt;
     }
 
-    static String getStmt(String block, List<String> original, int line) {
+    private static String getStmt(String block, List<String> original, int line) {
         if (!block.contains("if("))
             return "";
         StringBuilder result = new StringBuilder();
@@ -89,15 +83,16 @@ public class main {
     }
 
     static boolean isSameInstructions(String a, String b) {
-        a = stripVariable(a);
-        b = stripVariable(b);
+        a = CodeParser.stripVariable(a);
+        b = CodeParser.stripVariable(b);
         return a.trim().equals(b.trim());
     }
 
     static String searchSimilarBlock(String block, List<String> original, int line) {
         ArrayList<String> instructions = CodeParser.getInstructions(block);
-        int offsetMax = min(line + instructions.size() * 2, original.size());
-        int offsetMin = line - 10;
+        int offsetMax = min(line + instructions.size() * 20, original.size());
+        CodeParser.stripTrivialInstructions(instructions);
+        int offsetMin = max(line - instructions.size() * 20, 0);
         StringBuilder result = new StringBuilder();
         int score = 0;
 
@@ -122,28 +117,21 @@ public class main {
         return isSourceCondition != isTargetCondition;
     }
 
-    static String replaceVariables(String sentence) {
-        Pattern p = Pattern.compile("v[\\d]+(_[\\d]+)");
-        Matcher m = p.matcher(sentence);
-        if (m.find()) {
-            String got = m.group();
-            got = got.replaceAll("(_[\\d]+)", "");
-            sentence = sentence.replaceAll(m.group(), got);
-//             strict filter
-            sentence = sentence.replaceAll(m.group(), "");
-        }
-        return sentence;
-//        return sentence.replaceAll("v[\\d]+(_[\\d]+)", "");
-    }
-
-    static String parseCondition(String sentence) {
-//        Pattern p = Pattern.compile("if\\((.*)\\)");
+//    static String replaceVariables(String sentence) {
+//        Pattern p = Pattern.compile("v[\\d]+(_[\\d]+)");
 //        Matcher m = p.matcher(sentence);
 //        if (m.find()) {
-//            return m.group();
+//            String got = m.group();
+//            got = got.replaceAll("(_[\\d]+)", "");
+//            sentence = sentence.replaceAll(m.group(), got);
+////             strict filter
+//            sentence = sentence.replaceAll(m.group(), "");
 //        }
-//        return "";
+//        return sentence;
+////        return sentence.replaceAll("v[\\d]+(_[\\d]+)", "");
+//    }
 
+    static String parseCondition(String sentence) {
         int leftBracketNum = 0;
         String condition = "";
         int startIdx = sentence.indexOf("if");
@@ -154,7 +142,6 @@ public class main {
         for (int i = startIdx; i < sentence.length(); i++) {
             if ('(' == sentence.charAt(i)) {
                 leftBracketNum++;
-                continue;
             } else if (sentence.charAt(i) == ')') {
                 leftBracketNum--;
                 if (0 == leftBracketNum) {
@@ -176,9 +163,9 @@ public class main {
             String source = delta.getSource().toString();
             String target = delta.getTarget().toString();
 //            source = replaceVariables(source);
-            source = stripVariable(source);
+            source = CodeParser.stripVariable(source);
 //            target = replaceVariables(target);
-            target = stripVariable(target);
+            target = CodeParser.stripVariable(target);
 
             String sourceCond = parseCondition(source);
 //            parser("private Uri creatFileForSharedContent(Context arg18, CharSequence arg19, String arg20) {\n" +
@@ -246,21 +233,22 @@ public class main {
         String targetStmt = getStmt(delta.getTarget().toString(), revised, delta.getTarget().getPosition());
         sourceStmt = CodeParser.getOuterBlock(sourceStmt);
         targetStmt = CodeParser.getOuterBlock(targetStmt);
+        boolean found = false;
         if (!targetStmt.equals("")) {
             String another = searchSimilarBlock(targetStmt, original, delta.getSource().getPosition());
             if (!another.equals("")) {
-
-                ++targetCount;
-                System.out.println(new File(firstFile).getName());
-                dumpDelta(delta, original, revised);
+                found = true;
             }
         } else if (!sourceStmt.equals("")) {
             String another = searchSimilarBlock(sourceStmt, revised, delta.getTarget().getPosition());
             if (!another.equals("")) {
-                ++targetCount;
-                System.out.println(new File(firstFile).getName());
-                dumpDelta(delta, original, revised);
+                found = true;
             }
+        }
+        if (found) {
+            ++targetCount;
+            System.out.println("New Condition Case Found in the " + new File(firstFile).getName());
+            dumpDelta(delta, original, revised);
         }
         return targetCount;
     }
@@ -281,33 +269,37 @@ public class main {
         }
         String sourceStmt = getStmt(source, original, delta.getSource().getPosition());
         String targetStmt = getStmt(target, revised, delta.getTarget().getPosition());
-//        sourceStmt = CodeParser.getOuterBlock(sourceStmt);
-//        targetStmt = CodeParser.getOuterBlock(targetStmt);
 //        if (!targetStmt.equals("") && !sourceStmt.equals("")) {
-        if (CodeParser.valuateBlocks(sourceStmt, targetStmt) > 50) {
-            String another = searchSimilarBlock(targetStmt, original, delta.getSource().getPosition());
-            if (!another.equals("")) {
-
+        if (Analyzer.valuateBlocks(sourceStmt, targetStmt) > 50) {
+            int condScore = Analyzer.valuateCondition(sourceCond, targetCond);
+            // expected not obfuscated condition
+            if (condScore < 50) {
                 ++targetCount;
-                System.out.println(new File(firstFile).getName());
+                System.out.println("Similar Condition Found in the " + new File(firstFile).getName());
                 dumpDelta(delta, original, revised);
             }
         }
         return targetCount;
     }
 
-    static int runPatchAnalyzer(String firstFile, String secondFile) {
+    private static int runPatchAnalyzer(String firstFile, String secondFile) {
         int targetCount = 0;
         try {
             List<String> original = Files.readAllLines(new File(firstFile).toPath());
             List<String> revised = Files.readAllLines(new File(secondFile).toPath());
 
-            Patch<String> patch = null;
+            Patch<String> patch;
             patch = DiffUtils.diff(original, revised);
             for (AbstractDelta<String> delta : patch.getDeltas()) {
 //                if (!isTargetDelta(delta)) {
 //                    continue;
 //                }
+
+                /**
+                 * Note:
+                 *  runNewConditionAnalyzer
+                 *  runSimilarConditionAnalyzer
+                 */
 //                targetCount += runNewConditionAnalyzer(delta, original, revised, firstFile, secondFile);
                 targetCount += runSimilarConditionAnalyzer(delta, original, revised, firstFile, secondFile);
 
@@ -328,12 +320,14 @@ public class main {
         for (Object originalFile : originalFiles) {
             String filename = new File(originalFile.toString().trim()).getName();
             if (filename.startsWith("1")) {
-                filename = filename.substring(2);
+                filename = filename.substring(2).replace(".1.", ".");
                 int dot = filename.lastIndexOf('.');
 
                 if ((dot > -1) && (dot < (filename.length()))) {
                     filename = filename.substring(0, dot);
                 }
+                String smaliFilename = filename;
+
                 filename = filename.replace(".", File.separator);
                 // replace the inner class
                 filename = filename.replaceFirst("\\$[^.]+", "");
@@ -342,7 +336,7 @@ public class main {
                 if (new File(filename).exists()) {
                     result.add(filename);
                 } else {
-                    System.out.println("Can't found " + filename);
+                    System.out.println("Can't found " + filename + "\n\tby the " + smaliFilename + " smali file");
                     throw new IOException(filename + " source not found.");
                 }
 
@@ -355,6 +349,7 @@ public class main {
 
     /**
      * Main runner
+     *
      * @param args
      */
     public static void main(String[] args) {
@@ -363,18 +358,21 @@ public class main {
          *  Decompile the apk first.
          * */
 
-        String originalDir = "PATH\\com.android.updater-6.6.2-73-1f820e48253a818b";
-        String revisedDir = "PATH\\com.android.updater-6.6.2-73-aef06b652ac468d0";
-        String smaliDir = "PATH\\result\\similar";
+        String commonBase = "PATH\\com.xiaomi.bluetooth1\\";
+//        String originalDir = commonBase + "com.miui.analytics-2.42.0-2020042600-cdc1b0964df6306b";
+        String originalDir = commonBase + "com.xiaomi.bluetooth-10-29-1f791f81bfa7788d";
+//        String revisedDir = commonBase + "com.miui.analytics-2.43.0-2020050800-8f1d083bc8b710ee";
+        String revisedDir = commonBase + "com.xiaomi.bluetooth-10-29-3cea60ddbf42344e";
+        String smaliDir = commonBase + "result\\similar";
 
         int targetCount = 0;
         try {
-            /*FolderFileScanner originalFileScanner = new FolderFileScanner();
-            ArrayList<Object> originalFiles = originalFileScanner.scanFiles(originalDir);
-            System.out.println("Scan " + originalFiles.size() + " files totally in original directory.");
-            FolderFileScanner revisedFileScanner = new FolderFileScanner();
-            ArrayList<Object> revisedFiles = revisedFileScanner.scanFiles(revisedDir);
-            System.out.println("Scan " + revisedFiles.size() + " files totally in revised directory.");*/
+//            FolderFileScanner originalFileScanner = new FolderFileScanner();
+//            ArrayList<Object> originalFiles = originalFileScanner.scanFiles(originalDir);
+//            System.out.println("Scan " + originalFiles.size() + " files totally in original directory.");
+//            FolderFileScanner revisedFileScanner = new FolderFileScanner();
+//            ArrayList<Object> revisedFiles = revisedFileScanner.scanFiles(revisedDir);
+//            System.out.println("Scan " + revisedFiles.size() + " files totally in revised directory.");
 
 
             int processedOriginalFiles = 0;

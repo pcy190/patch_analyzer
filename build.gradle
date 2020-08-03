@@ -13,5 +13,10 @@ repositories {
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
+    implementation 'com.github.javaparser:javaparser-symbol-solver-core:3.16.1'
     implementation "io.github.java-diff-utils:java-diff-utils:4.5"
+//    compile group: 'ca.mcgill.sable', name: 'soot', version: '4.1.0'
+//    compile group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.30'
+    // see https://stackoverflow.com/questions/7421612/slf4j-failed-to-load-class-org-slf4j-impl-staticloggerbinder
+
 }
