@@ -5,7 +5,7 @@ import java.util.*;
  */
 
 
-public class CodeParser {
+class CodeParser {
 
     private static String LEFT_BRACKET = "{";
     private static String RIGHT_BRACKET = "}";
@@ -95,45 +95,5 @@ public class CodeParser {
             }
         }
         return condList;
-    }
-
-
-    /**
-     * Only for test
-     *
-     * @param args
-     */
-    public static void main(String[] args) {
-        String source = "        Intent v0;\n" +
-                "        String v1 = \"BluetoothOppLauncherActivity\";\n" +
-                "        if(!BluetoothOppManager.getInstance(this.getApplicationContext()).isEnabled()) {\n" +
-                "            if(BluetoothOppLauncherActivity.V) {\n" +
-                "                Log.v(v1, \"Prepare Enable BT!! \");\n" +
-                "            }\n" +
-                "\n" +
-                "            v0 = new Intent(((Context)this), BluetoothOppBtEnableActivity.class);\n" +
-                "            v0.setFlags(0x10000000);\n" +
-                "            this.startActivity(v0);\n" +
-                "        }\n" +
-                "        else {";
-        String target = "        Intent v0;\n" +
-                "        String v1 = \"BluetoothOppLauncherActivity\";\n" +
-                "        if(!BluetoothOppManager.getInstance(((Context)this)).isEnabled()) {\n" +
-                "            if(BluetoothOppLauncherActivity.V) {\n" +
-                "                Log.v(v1, \"Prepare Enable BT!! \");\n" +
-                "            }\n" +
-                "\n" +
-                "            v0 = new Intent(((Context)this), BluetoothOppBtEnableActivity.class);\n" +
-                "            v0.setFlags(0x10000000);\n" +
-                "            this.startActivity(v0);\n" +
-                "        }\n" +
-                "        else {";
-//        System.out.println(getOuterBlock(""));
-//        System.out.println(valuateBlocks(source, target));
-
-        System.out.println(parseConditionToToken("happy&&sdfaff||454a &&acfa.as < iocs.pa || a.b.c"));
-        System.out.println(splitToken(" !happy.1.2.5"));
-
-
     }
 }

@@ -6,11 +6,11 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 import static java.lang.Math.max;
 import static java.lang.Math.min;
@@ -19,34 +19,8 @@ import static java.lang.Math.min;
  * Created by HAPPY
  */
 
-class FolderFileScanner {
-
-    private ArrayList<Object> scanFiles = new ArrayList<Object>();
-
-
-    ArrayList<Object> scanFiles(String folderPath) throws IOException {
-        File directory = new File(folderPath);
-        if (!directory.isDirectory()) {
-            throw new IOException('"' + folderPath + '"' + " input path is not a directory.");
-        }
-        File[] fileList = directory.listFiles();
-        if (fileList != null) {
-            for (File file : fileList) {
-                if (file.isDirectory()) {
-                    scanFiles(file.getAbsolutePath());
-                } else {
-                    scanFiles.add(file.getAbsolutePath());
-                }
-            }
-        }
-        return scanFiles;
-    }
-
-}
-
 public class main {
 
-    private static int contraryConditionCnt = 0;
     private static int dumpLineLower = -4;
     private static int dumpLineUpper = 6;
 
@@ -112,7 +86,7 @@ public class main {
         }
     }
 
-    static boolean isUnaryCondition(String source, String target) {
+    private static boolean isUnaryCondition(String source, String target) {
         boolean isSourceCondition = source.contains(" if(");
         boolean isTargetCondition = target.contains(" if(");
         return isSourceCondition != isTargetCondition;
@@ -132,9 +106,8 @@ public class main {
 ////        return sentence.replaceAll("v[\\d]+(_[\\d]+)", "");
 //    }
 
-    static String parseCondition(String sentence) {
+    private static String parseCondition(String sentence) {
         int leftBracketNum = 0;
-        String condition = "";
         int startIdx = sentence.indexOf("if");
         if (startIdx == -1) {
             return "";
@@ -153,44 +126,14 @@ public class main {
         return "";
     }
 
-    static boolean isContraryCondition(String source, String target) {
+    private static boolean isContraryCondition(String source, String target) {
         String convertedSource = source.replace("!=", "==");
         String convertedTarget = target.replace("!=", "==");
         return convertedSource.equals(convertedTarget);
     }
 
-    static boolean isTargetDelta(AbstractDelta<String> delta) {
-        if (delta.getSource().toString().contains(" if(") || delta.getTarget().toString().contains(" if(")) {
-            String source = delta.getSource().toString();
-            String target = delta.getTarget().toString();
-//            source = replaceVariables(source);
-            source = CodeParser.stripVariable(source);
-//            target = replaceVariables(target);
-            target = CodeParser.stripVariable(target);
 
-            String sourceCond = parseCondition(source);
-//            parser("private Uri creatFileForSharedContent(Context arg18, CharSequence arg19, String arg20) {\n" +
-//                    "\tif(arg19 == null) {\n" +
-//                    "\t\treturn null;\n" +
-//                    "\t}\n" +
-//                    "}");
-            String targetCond = parseCondition(target);
-            if (!sourceCond.equals(targetCond)) {
-
-                if (isContraryCondition(sourceCond, targetCond)) {
-                    ++contraryConditionCnt;
-                    System.out.println("Found Similar Condition Delta   ===================");
-
-                    return true;
-                }
-                return true;
-            } else
-                return false;
-        }
-        return false;
-    }
-
-    static void dumpDelta(AbstractDelta<String> delta, List<String> original, List<String> revised) {
+    private static void dumpDelta(AbstractDelta<String> delta, List<String> original, List<String> revised) {
         System.out.println(delta.getSource());
         System.out.println(delta.getTarget());
         System.out.println(delta.getType());
@@ -226,8 +169,8 @@ public class main {
         }
     }
 
-    static int runNewConditionAnalyzer(AbstractDelta<String> delta, List<String> original, List<String> revised,
-                                       String firstFile, String secondFile) {
+    private static int runNewConditionAnalyzer(AbstractDelta<String> delta, List<String> original, List<String> revised,
+                                               String firstFile, String secondFile) {
         int targetCount = 0;
         if (!isUnaryCondition(delta.getSource().toString(), delta.getTarget().toString())) {
             return 0;
@@ -250,15 +193,14 @@ public class main {
         }
         if (found) {
             ++targetCount;
-//            System.out.println("New Condition Case Found in the " + new File(firstFile).getName());
             System.out.println("New Condition Case Found in \n\t" + firstFile + "\n\t" + secondFile);
             dumpDelta(delta, original, revised);
         }
         return targetCount;
     }
 
-    static int runSimilarConditionAnalyzer(AbstractDelta<String> delta, List<String> original, List<String> revised,
-                                           String firstFile, String secondFile) {
+    private static int runSimilarConditionAnalyzer(AbstractDelta<String> delta, List<String> original, List<String> revised,
+                                                   String firstFile, String secondFile) {
         int targetCount = 0;
         if (isUnaryCondition(delta.getSource().toString(), delta.getTarget().toString())) {
             return 0;
@@ -273,49 +215,17 @@ public class main {
         }
         String sourceStmt = getStmt(source, original, delta.getSource().getPosition());
         String targetStmt = getStmt(target, revised, delta.getTarget().getPosition());
-//        if (!targetStmt.equals("") && !sourceStmt.equals("")) {
         if (Analyzer.valuateBlocks(sourceStmt, targetStmt) > 50) {
             int condScore = Analyzer.valuateCondition(sourceCond, targetCond);
             // expected not obfuscated condition
             if (condScore < 50) {
                 ++targetCount;
-//                System.out.println("Similar Condition Found in the " + new File(firstFile).getName());
                 System.out.println("Similar Condition Found in the \n\t" + firstFile+"\n\t"+secondFile);
                 dumpDelta(delta, original, revised);
             }
         }
         return targetCount;
     }
-
-    private static int runPatchAnalyzer(String firstFile, String secondFile) {
-        int targetCount = 0;
-        try {
-            List<String> original = Files.readAllLines(new File(firstFile).toPath());
-            List<String> revised = Files.readAllLines(new File(secondFile).toPath());
-
-            Patch<String> patch;
-            patch = DiffUtils.diff(original, revised);
-            for (AbstractDelta<String> delta : patch.getDeltas()) {
-//                if (!isTargetDelta(delta)) {
-//                    continue;
-//                }
-
-                /**
-                 * Note:
-                 *  runNewConditionAnalyzer
-                 *  runSimilarConditionAnalyzer
-                 */
-//                targetCount += runNewConditionAnalyzer(delta, original, revised, firstFile, secondFile);
-                targetCount += runSimilarConditionAnalyzer(delta, original, revised, firstFile, secondFile);
-
-            }
-        } catch (DiffException | IOException e) {
-            e.printStackTrace();
-        }
-        return targetCount;
-    }
-
-    //
 
     private static int runNewPatchAnalyzer(String firstFile, String secondFile, Map<String, String> methodsMap) {
         int targetCount = 0;
@@ -346,43 +256,6 @@ public class main {
         }
         return targetCount;
     }
-
-    static ArrayList<String> fetchFilenameFromSmali(String prefixDir, String smaliDir) throws IOException {
-        ArrayList<String> result = new ArrayList<>();
-        if (!prefixDir.endsWith(File.separator)) {
-            prefixDir = prefixDir + File.separator;
-        }
-        FolderFileScanner originalFileScanner = new FolderFileScanner();
-        ArrayList<Object> originalFiles = originalFileScanner.scanFiles(smaliDir);
-        for (Object originalFile : originalFiles) {
-            String filename = new File(originalFile.toString().trim()).getName();
-            if (filename.startsWith("1")) {
-                filename = filename.substring(2).replace(".1.", ".");
-                int dot = filename.lastIndexOf('.');
-
-                if ((dot > -1) && (dot < (filename.length()))) {
-                    filename = filename.substring(0, dot);
-                }
-                String smaliFilename = filename;
-
-                filename = filename.replace(".", File.separator);
-                // replace the inner class
-                filename = filename.replaceFirst("\\$[^.]+", "");
-                filename = prefixDir + filename + ".java";
-
-                if (new File(filename).exists()) {
-                    result.add(filename);
-                } else {
-                    System.out.println("Can't found " + filename + "\n\tby the " + smaliFilename + " smali file");
-                    throw new IOException(filename + " source not found.");
-                }
-
-            }
-        }
-        return result;
-
-    }
-
 
     /**
      * Main runner
@@ -437,57 +310,13 @@ public class main {
 
         int targetCount = 0;
         try {
-//            FolderFileScanner originalFileScanner = new FolderFileScanner();
-//            ArrayList<Object> originalFiles = originalFileScanner.scanFiles(originalDir);
-//            System.out.println("Scan " + originalFiles.size() + " files totally in original directory.");
-//            FolderFileScanner revisedFileScanner = new FolderFileScanner();
-//            ArrayList<Object> revisedFiles = revisedFileScanner.scanFiles(revisedDir);
-//            System.out.println("Scan " + revisedFiles.size() + " files totally in revised directory.");
-
-            /**
-             * Original Source Code scan
-             */
-//            int processedOriginalFiles = 0;
-//
-//            ArrayList<String> originalFiles = fetchFilenameFromSmali(originalDir, smaliDir);
-//            ArrayList<String> revisedFiles = fetchFilenameFromSmali(revisedDir, smaliDir);
-//
-//            for (Object originalFile : originalFiles) {
-//                String originalFilename = new File(originalFile.toString().trim()).getName();
-//                for (Object revisedFile : revisedFiles) {
-//                    String revisedFilename = new File(revisedFile.toString().trim()).getName();
-//                    if (originalFilename.equals(revisedFilename)) {
-//                        /* Run analyzer */
-//                        targetCount += runPatchAnalyzer(originalFile.toString(), revisedFile.toString());
-//                        processedOriginalFiles++;
-//                        revisedFiles.remove(revisedFile);
-//                        break;
-//                    }
-//                }
-//            }
-//
-//            System.out.println((originalFiles.size() - processedOriginalFiles) + " original files remains.");
-//            System.out.println(revisedFiles.size() + " revised files remains.");
-//            System.out.println(targetCount + " target patch found.");
-//            System.out.println(contraryConditionCnt + " similar contrary condition patch found.");
-
-            int processedOriginalFiles = 0;
-
-//            ArrayList<String> originalFiles = fetchFilenameFromSmali(originalDir, smaliDir);
-//            ArrayList<String> revisedFiles = fetchFilenameFromSmali(revisedDir, smaliDir);
-
             Map<String[], Map<String, String>> infos = Utils.readJsonData(sourcePkgName, targetPkgName, commonBase, jsonPath);
 
             for (String[] fileList : infos.keySet()) {
 
                 targetCount += runNewPatchAnalyzer(fileList[0], fileList[1], infos.get(fileList));
             }
-
-//            System.out.println((originalFiles.size() - processedOriginalFiles) + " original files remains.");
-//            System.out.println(revisedFiles.size() + " revised files remains.");
             System.out.println(targetCount + " target patch found.");
-//            System.out.println(contraryConditionCnt + " similar contrary condition patch found.");
-
         } catch (IOException e) {
             e.printStackTrace();
         }

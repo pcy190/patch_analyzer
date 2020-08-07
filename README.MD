@@ -59,7 +59,7 @@ build the project with
 gradle build
 ```
 
-## run
+## Run
 
 把两个版本的apk以及分析后的`similar.json`文件放入同一个文件夹。
 而后运行
@@ -103,7 +103,7 @@ similar.json的文件格式
 序号表示不同的文件，filename表示两个版本的smali文件名，methods表示两个中存在差异的方法签名。其中，不同版本间用空格分割。
 
 
-## analysis
+## Analysis
 分析结果中，例如
 ```
 Similar Condition Found in the MenuPopupWindow.java
