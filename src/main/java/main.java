@@ -250,7 +250,8 @@ public class main {
         }
         if (found) {
             ++targetCount;
-            System.out.println("New Condition Case Found in the " + new File(firstFile).getName());
+//            System.out.println("New Condition Case Found in the " + new File(firstFile).getName());
+            System.out.println("New Condition Case Found in \n\t" + firstFile + "\n\t" + secondFile);
             dumpDelta(delta, original, revised);
         }
         return targetCount;
@@ -278,7 +279,8 @@ public class main {
             // expected not obfuscated condition
             if (condScore < 50) {
                 ++targetCount;
-                System.out.println("Similar Condition Found in the " + new File(firstFile).getName());
+//                System.out.println("Similar Condition Found in the " + new File(firstFile).getName());
+                System.out.println("Similar Condition Found in the \n\t" + firstFile+"\n\t"+secondFile);
                 dumpDelta(delta, original, revised);
             }
         }
@@ -393,31 +395,6 @@ public class main {
          *  Decompile the apk in advance.
          * */
 
-//        String commonBase = "D:\\WorkSpace\\SJTU\\com.xiaomi.bluetooth1\\";
-//        String originalDir = commonBase + "com.xiaomi.bluetooth-10-29-1f791f81bfa7788d";
-//        String revisedDir = commonBase + "com.xiaomi.bluetooth-10-29-3cea60ddbf42344e";
-
-//        String commonBase = "D:\\WorkSpace\\SJTU\\com.miui.cit2\\";
-//        String sourcePkgName = "com.miui.cit-1.1.1110.200423.e2b3d20-1011110-bd255f90d76e15bf";
-//        String targetPkgName = "com.miui.cit-1.1.1115.200519.463ab7d-1011115-50c37f722d4f74c7";
-//        String commonBase = "D:\\WorkSpace\\SJTU\\com.xiaomi.misettings\\";
-//        String sourcePkgName = "com.xiaomi.misettings-2.8.5-200430011-24c9c68e67f1bfc4";
-//        String targetPkgName = "com.xiaomi.misettings-2.7.2-200317011-2dad34ab84d36a3a";
-
-//        String commonBase = "D:\\WorkSpace\\SJTU\\com.miui.securitycore1\\";
-//        String sourcePkgName = "com.miui.securitycore-22-22-26a2b260d23cc05e";
-//        String targetPkgName = "com.miui.securitycore-22-22-2476fbb9d2b9bfbd";
-//        String jebPath = "H:\\jeb-pro-3.19.1.202005071620\\";
-
-//        Scanner sc = new Scanner(System.in);
-//        System.out.println("Input common base path:");
-//        String commonBase = sc.nextLine();
-//        System.out.println("Input sourcePkgName:");
-//        String sourcePkgName = sc.nextLine();
-//        System.out.println("Input targetPkgName:");
-//        String targetPkgName = sc.nextLine();
-//        System.out.println("Input jeb path:");
-//        String jebPath = sc.nextLine();
 
         /**
          * Usage on linux:
