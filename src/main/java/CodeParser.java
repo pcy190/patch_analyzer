@@ -50,7 +50,8 @@ public class CodeParser {
         ArrayList<String> result = new ArrayList<>();
         for (String instruction : instructions) {
             instruction = instruction.trim();
-            if (!instruction.equals("") && !instruction.equals("}") && !instruction.contains("return ") && !instruction.contains("goto ")) {
+            if (!instruction.equals("") && !instruction.equals("}")  && !instruction.contains("goto ")) {
+                //&& !instruction.contains("return ")
                 result.add(instruction);
             }
         }

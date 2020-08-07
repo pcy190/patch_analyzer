@@ -47,7 +47,7 @@ class FolderFileScanner {
 public class main {
 
     private static int contraryConditionCnt = 0;
-    private static int dumpLineLower = -2;
+    private static int dumpLineLower = -4;
     private static int dumpLineUpper = 6;
 
     private static int countChar(String sentence, String targetChar) {
