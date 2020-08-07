@@ -1,39 +1,57 @@
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.Log;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.lang.Math.abs;
 
 /**
- * Created by HAPPY on 2020/7/30 16:48
+ * Created by HAPPY on 2020/7/30
  */
 public class Analyzer {
+
+    private static final int EMPTY_FUNCTION_SCORE_THRESHOLD = 50;
+
+    private static final boolean OBF_STRICT_SCHEME = false;
 
     static int valuateToken(String source, String target) {
         /**
          * Deal with the obf case
          */
+
+        source = CodeParser.stripVariable(source);
+        target = CodeParser.stripVariable(target);
+
+        source = CodeParser.repalceNullToken(source);
+        target = CodeParser.repalceNullToken(target);
+
         if (source.length() == target.length()) {
             if (source.length() == 0) return 100;
             boolean isObfuscated = true;
             for (int i = 0; i < source.length(); i++) {
                 if (source.charAt(i) != target.charAt(i)) {
                     if (!(Character.isLetter(source.charAt(i)) && Character.isLetter(target.charAt(i)))) {
-                        if (abs(source.charAt(i) - target.charAt(i)) > 2) {
+                        if (OBF_STRICT_SCHEME) {
+
+                            if (abs(source.charAt(i) - target.charAt(i)) > 2) {
+                                isObfuscated = false;
+                            }
+                        } else {
                             isObfuscated = false;
+
                         }
                     }
 
@@ -111,6 +129,40 @@ public class Analyzer {
     }
 
 
+    static int valuateFunctions(MethodDeclaration source, MethodDeclaration target) {
+//        assert source.getBody().isPresent();
+//        assert target.getBody().isPresent();
+
+//        BlockStmt sourceBody = source.getBody().get();
+//        BlockStmt targetBody = source.getBody().get();
+        if (!source.getBody().isPresent() && !target.getBody().isPresent()) {
+            return 100;
+        } else if (!source.getBody().isPresent() || !target.getBody().isPresent()) {
+            return EMPTY_FUNCTION_SCORE_THRESHOLD;
+        }
+        NodeList<Statement> sourceStmtList = source.getBody().get().getStatements();
+        NodeList<Statement> targetStmtList = target.getBody().get().getStatements();
+        ArrayList<String> sourceInstructions = sourceStmtList.stream().map(Node::toString).collect(Collectors.toCollection(ArrayList::new));
+        ArrayList<String> targetInstructions = targetStmtList.stream().map(Node::toString).collect(Collectors.toCollection(ArrayList::new));
+
+
+        int score = 0;
+        if (source.getDeclarationAsString().equals(target.getDeclarationAsString()))
+            score += 50;
+        else if (source.getNameAsString().equals(target.getNameAsString()))
+            score += 30;
+
+        int sourceInstSize = sourceInstructions.size();
+        if (sourceInstSize == 0) {
+            if (targetInstructions.size() == 0) return 100;
+            else return 0;
+        }
+        sourceInstructions.removeAll(targetInstructions);
+        score += 100 * (sourceInstSize - sourceInstructions.size()) / sourceInstSize;
+        return score;
+    }
+
+
     public static ArrayList<MethodDeclaration> parseFunctionList(Path path) {
         JavaParser javaParser = new JavaParser();
         Optional<CompilationUnit> op;
@@ -156,6 +208,10 @@ public class Analyzer {
 //                            IfStmt IfStmt = (IfStmt) nodeList.get(i);
 //                            System.out.println(IfStmt.toString());
 //                        }
+                        if (nodeList.get(i) instanceof IfStmt) {
+                            IfStmt IfStmt = (IfStmt) nodeList.get(i);
+                            System.out.println(IfStmt.toString());
+                        }
                     }
                 }
 
@@ -165,6 +221,44 @@ public class Analyzer {
         }, funcList);
 
         return funcList;
+    }
+
+
+    public static String getFunctionBody(String funcName, ArrayList<MethodDeclaration> sourceFunctionList) {
+        for (MethodDeclaration sourceDeclaration : sourceFunctionList) {
+            /**
+             * init() ignored
+             */
+            if (sourceDeclaration.getNameAsString().equals(funcName)) {
+                return sourceDeclaration.getBody().toString();
+            }
+        }
+        return "";
+
+    }
+
+    static Map<MethodDeclaration, MethodDeclaration> getSourceObfFunctionMap(ArrayList<MethodDeclaration> sourceFunctionList,
+                                                                             ArrayList<MethodDeclaration> targetFunctionList) {
+        Map<MethodDeclaration, MethodDeclaration> sourceObfFunctionMap = new HashMap<>();
+
+        for (MethodDeclaration sourceDeclaration : sourceFunctionList) {
+            int curMaxScore = 0;
+            for (MethodDeclaration targetDeclaration : targetFunctionList) {
+                int score = valuateFunctions(sourceDeclaration, targetDeclaration);
+                if (score > 98) {
+                    targetFunctionList.remove(targetDeclaration);
+                    sourceObfFunctionMap.put(sourceDeclaration, targetDeclaration);
+                    break;
+                } else {
+                    if (score > curMaxScore) {
+                        sourceObfFunctionMap.put(sourceDeclaration, targetDeclaration);
+                        curMaxScore = score;
+                    }
+                }
+            }
+//            }
+        }
+        return sourceObfFunctionMap;
     }
 
     public static void main(String[] args) throws IOException, AnalyzerException {
@@ -218,20 +312,49 @@ public class Analyzer {
         File targetFile = new File("D:\\WorkSpace\\SJTU\\com.xiaomi.bluetooth1\\com.xiaomi.bluetooth-10-29-3cea60ddbf42344e\\com\\android\\bluetooth\\ble\\app\\MiuiFastConnectService.java");
         ArrayList<MethodDeclaration> sourceFunctionList = parseFunctionList(sourceFile.toPath());
         ArrayList<MethodDeclaration> targetFunctionList = parseFunctionList(targetFile.toPath());
+//        ArrayList<MethodDeclaration> remainedTargetFunctionList = targetFunctionList.;
         Map<MethodDeclaration, MethodDeclaration> sourceObfFunctionMap = new HashMap<>();
 
+
         for (MethodDeclaration sourceDeclaration : sourceFunctionList) {
-            boolean found = false;
+//            boolean found = false;
+//            for (MethodDeclaration targetDeclaration : targetFunctionList) {
+//                if (sourceDeclaration.getName().equals(targetDeclaration.getName())) {
+//                    targetFunctionList.remove(targetDeclaration);
+//                    found = true;
+//                    break;
+//                }
+//            }
+//            if (!found) {
+//                System.out.println(sourceDeclaration.getDeclarationAsString() + " not found, now try to search it.");
+//            System.out.println("Searching " + sourceDeclaration.getNameAsString());
+            int curMaxScore = 0;
             for (MethodDeclaration targetDeclaration : targetFunctionList) {
-                if (sourceDeclaration.getName().equals(targetDeclaration.getName())) {
-                    found = true;
+                int score = valuateFunctions(sourceDeclaration, targetDeclaration);
+                if (score > 98) {
+//                    System.out.println("Valute The target Function from "
+//                            + sourceDeclaration.getDeclarationAsString()
+//                            + " to "
+//                            + targetDeclaration.getDeclarationAsString());
+                    targetFunctionList.remove(targetDeclaration);
+                    sourceObfFunctionMap.put(sourceDeclaration, targetDeclaration);
                     break;
+                } else {
+                    if (score > curMaxScore) {
+                        sourceObfFunctionMap.put(sourceDeclaration, targetDeclaration);
+                        curMaxScore = score;
+                    }
                 }
             }
-            if (!found) {
-                System.out.println(sourceDeclaration.getDeclarationAsString() + " not found.");
-            }
+//            }
         }
+        sourceObfFunctionMap.forEach((sourceFunction, targetFunction) -> {
+            System.out.println("Valute The target Function from "
+                    + sourceFunction.getDeclarationAsString()
+                    + " to "
+                    + targetFunction.getDeclarationAsString());
+        });
+        System.out.println("Found " + sourceObfFunctionMap.size() + "/" + sourceFunctionList.size() + " mapped functions");
     }
 
 }

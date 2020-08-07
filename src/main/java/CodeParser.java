@@ -16,6 +16,16 @@ public class CodeParser {
 
     };
 
+
+    static String repalceNullToken(String sentence){
+        if(sentence.endsWith(" null")){
+            sentence = sentence.substring(0, sentence.lastIndexOf("null"))+"0";
+        }
+        sentence = sentence.replace("null)", "0)");
+        sentence = sentence.replace(" null ", " 0 ");
+        return sentence;
+    }
+
     static String stripVariable(String sentence) {
         sentence = sentence.replaceAll("v[\\d]+(_[\\d]+)", "R");
         sentence = sentence.replaceAll("v[\\d]+", "R");

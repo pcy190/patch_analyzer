@@ -2,12 +2,13 @@ import com.github.difflib.DiffUtils;
 import com.github.difflib.algorithm.DiffException;
 import com.github.difflib.patch.AbstractDelta;
 import com.github.difflib.patch.Patch;
+import com.github.javaparser.ast.body.MethodDeclaration;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -60,7 +61,7 @@ public class main {
     }
 
     private static String getStmt(String block, List<String> original, int line) {
-        if (!block.contains("if("))
+        if (!block.contains("if"))
             return "";
         StringBuilder result = new StringBuilder();
         int numLeftBracket = 0;
@@ -210,7 +211,9 @@ public class main {
 
     private static void dumpCodeContent(List<String> original, int targetLine, int lineNum) {
         boolean hadLeftBrace = false;
-        for (int line = targetLine + dumpLineLower; line < targetLine + dumpLineUpper + lineNum; ++line) {
+        int lowerBound = max(0, targetLine + dumpLineLower);
+        int upperBound = min(targetLine + dumpLineUpper + lineNum, original.size());
+        for (int line = lowerBound; line < upperBound; ++line) {
             String lineToPrint = original.get(line);
             if (!hadLeftBrace) {
                 if (lineToPrint.indexOf('{') == -1 && lineToPrint.indexOf('}') != -1) {
@@ -310,6 +313,38 @@ public class main {
         return targetCount;
     }
 
+    //
+
+    private static int runNewPatchAnalyzer(String firstFile, String secondFile, Map<String, String> methodsMap) {
+        int targetCount = 0;
+        try {
+            ArrayList<MethodDeclaration> sourceFunctionList = Analyzer.parseFunctionList(Paths.get(firstFile));
+            ArrayList<MethodDeclaration> targetFunctionList = Analyzer.parseFunctionList(Paths.get(secondFile));
+
+
+            assert sourceFunctionList != null;
+            Map<MethodDeclaration, MethodDeclaration> obfMap = Analyzer.getSourceObfFunctionMap(sourceFunctionList, targetFunctionList);
+
+            for (MethodDeclaration sourceDeclaration : obfMap.keySet()) {
+                MethodDeclaration targetDeclaration = obfMap.get(sourceDeclaration);
+
+                List<String> original = Arrays.asList(sourceDeclaration.getBody().toString().replace("\\r", "").split("\\n|\\r"));
+                List<String> revised = Arrays.asList(targetDeclaration.getBody().toString().replace("\\r", "").split("\\n|\\r"));
+
+                Patch<String> patch;
+                patch = DiffUtils.diff(original, revised);
+                for (AbstractDelta<String> delta : patch.getDeltas()) {
+                    targetCount += runNewConditionAnalyzer(delta, original, revised, firstFile, secondFile);
+                    targetCount += runSimilarConditionAnalyzer(delta, original, revised, firstFile, secondFile);
+                }
+            }
+
+        } catch (DiffException e) {
+            e.printStackTrace();
+        }
+        return targetCount;
+    }
+
     static ArrayList<String> fetchFilenameFromSmali(String prefixDir, String smaliDir) throws IOException {
         ArrayList<String> result = new ArrayList<>();
         if (!prefixDir.endsWith(File.separator)) {
@@ -355,15 +390,73 @@ public class main {
     public static void main(String[] args) {
         /*
          * Process java file only
-         *  Decompile the apk first.
+         *  Decompile the apk in advance.
          * */
 
-        String commonBase = "PATH\\com.xiaomi.bluetooth1\\";
-//        String originalDir = commonBase + "com.miui.analytics-2.42.0-2020042600-cdc1b0964df6306b";
-        String originalDir = commonBase + "com.xiaomi.bluetooth-10-29-1f791f81bfa7788d";
-//        String revisedDir = commonBase + "com.miui.analytics-2.43.0-2020050800-8f1d083bc8b710ee";
-        String revisedDir = commonBase + "com.xiaomi.bluetooth-10-29-3cea60ddbf42344e";
-        String smaliDir = commonBase + "result\\similar";
+//        String commonBase = "D:\\WorkSpace\\SJTU\\com.xiaomi.bluetooth1\\";
+//        String originalDir = commonBase + "com.xiaomi.bluetooth-10-29-1f791f81bfa7788d";
+//        String revisedDir = commonBase + "com.xiaomi.bluetooth-10-29-3cea60ddbf42344e";
+
+//        String commonBase = "D:\\WorkSpace\\SJTU\\com.miui.cit2\\";
+//        String sourcePkgName = "com.miui.cit-1.1.1110.200423.e2b3d20-1011110-bd255f90d76e15bf";
+//        String targetPkgName = "com.miui.cit-1.1.1115.200519.463ab7d-1011115-50c37f722d4f74c7";
+//        String commonBase = "D:\\WorkSpace\\SJTU\\com.xiaomi.misettings\\";
+//        String sourcePkgName = "com.xiaomi.misettings-2.8.5-200430011-24c9c68e67f1bfc4";
+//        String targetPkgName = "com.xiaomi.misettings-2.7.2-200317011-2dad34ab84d36a3a";
+
+//        String commonBase = "D:\\WorkSpace\\SJTU\\com.miui.securitycore1\\";
+//        String sourcePkgName = "com.miui.securitycore-22-22-26a2b260d23cc05e";
+//        String targetPkgName = "com.miui.securitycore-22-22-2476fbb9d2b9bfbd";
+//        String jebPath = "H:\\jeb-pro-3.19.1.202005071620\\";
+
+//        Scanner sc = new Scanner(System.in);
+//        System.out.println("Input common base path:");
+//        String commonBase = sc.nextLine();
+//        System.out.println("Input sourcePkgName:");
+//        String sourcePkgName = sc.nextLine();
+//        System.out.println("Input targetPkgName:");
+//        String targetPkgName = sc.nextLine();
+//        System.out.println("Input jeb path:");
+//        String jebPath = sc.nextLine();
+
+        /**
+         * Usage on linux:
+         *  java -jar patch_analyser.jar /home/lhh/patch_if/analyzer/com.miui.securitycore2 com.miui.securitycore-22-22-9e86cfb9a036b4ce com.miui.securitycore-22-22-26a2b260d23cc05e /home/lhh/patch_if/jeb-pro-3.19.1.202005071620
+         *
+         *  java -jar patch_analyser.jar /home/lhh/patch_if/analyzer/com.xiaomi.misettings  com.xiaomi.misettings-2.8.5-200430011-24c9c68e67f1bfc4 com.xiaomi.misettings-2.7.2-200317011-2dad34ab84d36a3a /home/lhh/patch_if/jeb-pro-3.19.1.202005071620
+         *
+         *  java -jar patch_analyser.jar /home/lhh/patch_if/analyzer/com.miui.securitycore1 com.miui.securitycore-22-22-26a2b260d23cc05e com.miui.securitycore-22-22-2476fbb9d2b9bfbd /home/lhh/patch_if/jeb-pro-3.19.1.202005071620
+         */
+
+        if (args.length != 4) {
+            System.out.println("Usage: commonPath sourcePkg targetPkg jebPath ");
+            return;
+        }
+        String commonBase = args[0];
+        String sourcePkgName = args[1];
+        String targetPkgName = args[2];
+        String jebPath = args[3];
+
+        /**
+         * format path
+         */
+        if (!commonBase.endsWith(File.separator)) {
+            commonBase = commonBase + File.separator;
+        }
+        if (!jebPath.endsWith(File.separator)) {
+            jebPath = jebPath + File.separator;
+        }
+
+        String jsonPath = commonBase + "similar.json";
+//        String smaliDir = commonBase + "result\\similar";
+
+        String sourceApkName = commonBase + sourcePkgName + ".apk";
+        String targetApkName = commonBase + targetPkgName + ".apk";
+        assert new File(sourceApkName).exists();
+        assert new File(targetApkName).exists();
+        Decompiler.decompileApk(sourceApkName, commonBase, jebPath);
+        Decompiler.decompileApk(targetApkName, commonBase, jebPath);
+
 
         int targetCount = 0;
         try {
@@ -374,30 +467,49 @@ public class main {
 //            ArrayList<Object> revisedFiles = revisedFileScanner.scanFiles(revisedDir);
 //            System.out.println("Scan " + revisedFiles.size() + " files totally in revised directory.");
 
+            /**
+             * Original Source Code scan
+             */
+//            int processedOriginalFiles = 0;
+//
+//            ArrayList<String> originalFiles = fetchFilenameFromSmali(originalDir, smaliDir);
+//            ArrayList<String> revisedFiles = fetchFilenameFromSmali(revisedDir, smaliDir);
+//
+//            for (Object originalFile : originalFiles) {
+//                String originalFilename = new File(originalFile.toString().trim()).getName();
+//                for (Object revisedFile : revisedFiles) {
+//                    String revisedFilename = new File(revisedFile.toString().trim()).getName();
+//                    if (originalFilename.equals(revisedFilename)) {
+//                        /* Run analyzer */
+//                        targetCount += runPatchAnalyzer(originalFile.toString(), revisedFile.toString());
+//                        processedOriginalFiles++;
+//                        revisedFiles.remove(revisedFile);
+//                        break;
+//                    }
+//                }
+//            }
+//
+//            System.out.println((originalFiles.size() - processedOriginalFiles) + " original files remains.");
+//            System.out.println(revisedFiles.size() + " revised files remains.");
+//            System.out.println(targetCount + " target patch found.");
+//            System.out.println(contraryConditionCnt + " similar contrary condition patch found.");
 
             int processedOriginalFiles = 0;
 
-            ArrayList<String> originalFiles = fetchFilenameFromSmali(originalDir, smaliDir);
-            ArrayList<String> revisedFiles = fetchFilenameFromSmali(revisedDir, smaliDir);
+//            ArrayList<String> originalFiles = fetchFilenameFromSmali(originalDir, smaliDir);
+//            ArrayList<String> revisedFiles = fetchFilenameFromSmali(revisedDir, smaliDir);
 
-            for (Object originalFile : originalFiles) {
-                String originalFilename = new File(originalFile.toString().trim()).getName();
-                for (Object revisedFile : revisedFiles) {
-                    String revisedFilename = new File(revisedFile.toString().trim()).getName();
-                    if (originalFilename.equals(revisedFilename)) {
-                        /* Run analyzer */
-                        targetCount += runPatchAnalyzer(originalFile.toString(), revisedFile.toString());
-                        processedOriginalFiles++;
-                        revisedFiles.remove(revisedFile);
-                        break;
-                    }
-                }
+            Map<String[], Map<String, String>> infos = Utils.readJsonData(sourcePkgName, targetPkgName, commonBase, jsonPath);
+
+            for (String[] fileList : infos.keySet()) {
+
+                targetCount += runNewPatchAnalyzer(fileList[0], fileList[1], infos.get(fileList));
             }
 
-            System.out.println((originalFiles.size() - processedOriginalFiles) + " original files remains.");
-            System.out.println(revisedFiles.size() + " revised files remains.");
+//            System.out.println((originalFiles.size() - processedOriginalFiles) + " original files remains.");
+//            System.out.println(revisedFiles.size() + " revised files remains.");
             System.out.println(targetCount + " target patch found.");
-            System.out.println(contraryConditionCnt + " similar contrary condition patch found.");
+//            System.out.println(contraryConditionCnt + " similar contrary condition patch found.");
 
         } catch (IOException e) {
             e.printStackTrace();
